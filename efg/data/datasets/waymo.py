@@ -83,6 +83,7 @@ class WaymoDetectionDataset(BaseDataset):
 
             for i in range(nsweeps - 1):
                 sweep = info["sweeps"][i]
+                sweep["path"] = os.path.join(self.root_path, sweep["path"])
                 with open(sweep["path"], "rb") as f:
                     sweep_obj = pickle.load(f)
                 points_sweep, times_sweep = read_single_waymo_sweep(sweep, sweep_obj)

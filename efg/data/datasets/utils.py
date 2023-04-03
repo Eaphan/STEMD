@@ -2,7 +2,7 @@ import os
 import pickle
 
 import numpy as np
-
+from copy import deepcopy
 
 def read_from_file(info, nsweeps=1, root_path=""):
 
@@ -25,7 +25,7 @@ def read_from_file(info, nsweeps=1, root_path=""):
         )
 
         for i in range(nsweeps - 1):
-            sweep = info["sweeps"][i]
+            sweep = deepcopy(info["sweeps"][i])
             if not os.path.isabs(sweep["path"]):
                 sweep["path"] = os.path.join(root_path, sweep["path"])
             with open(sweep["path"], "rb") as f:
