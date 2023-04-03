@@ -146,6 +146,9 @@ def collate(batch_list, device):
     for key, elems in targets_merged.items():
         if key in ["voxels", "num_points_per_voxel", "num_voxels"]:
             ret[key] = torch.tensor(np.concatenate(elems, axis=0)).to(device)
+        elif key in ["voxels_list", "num_points_per_voxel_list"]:
+            nsweeps = len(elems[0])
+            ret[key] = [torch.tensor(np.concatenate([elem[i] for elem in elems])).to(device) for i in range(nsweeps)]
         elif key in ["gt_boxes", "labels", "gt_names", "difficulty", "num_points_in_gt"]:
             max_gt = -1
             for k in range(batch_size):
@@ -172,6 +175,15 @@ def collate(batch_list, device):
                 coor_pad = np.pad(coor, ((0, 0), (1, 0)), mode="constant", constant_values=i)
                 coors.append(coor_pad)
             ret[key] = torch.tensor(np.concatenate(coors, axis=0)).to(device)
+        elif key in ["coordinates_list"]:
+            nsweeps = len(elems[0])
+            ret[key] = []
+            for t in range(nsweeps):
+                coors = []
+                for i, coor_list in enumerate(elems):
+                    coor_pad = np.pad(coor_list[t], ((0, 0), (1, 0)), mode="constant", constant_values=i)
+                    coors.append(coor_pad)
+                ret[key].append(torch.tensor(np.concatenate(coors, axis=0)).to(device))
         else:
             ret[key] = np.stack(elems, axis=0)
 
