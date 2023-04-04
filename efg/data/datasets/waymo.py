@@ -87,6 +87,9 @@ class WaymoDetectionDataset(BaseDataset):
                 with open(sweep["path"], "rb") as f:
                     sweep_obj = pickle.load(f)
                 points_sweep, times_sweep = read_single_waymo_sweep(sweep, sweep_obj)
+                # print(f"###i={i}, ori times_sweep.max() = {times_sweep.max()}， time_lag= {sweep['time_lag']} path={sweep['path']}")
+                # if max(times_sweep) < 0.1 * (i+1) - 0.01: # ad hoc
+                times_sweep = 0.1 * (i+1) * np.ones((points_sweep.shape[0], 1))
                 sweep_points_list.append(points_sweep)
                 sweep_times_list.append(times_sweep)
 
