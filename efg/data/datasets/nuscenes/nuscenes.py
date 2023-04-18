@@ -1,13 +1,16 @@
 import logging
+import os
 import pickle
 from copy import deepcopy
 
 import numpy as np
 
-from efg.data.augmentations3d import _dict_select, build_processors
+from efg.data.augmentations import build_processors
+from efg.data.augmentations3d import _dict_select
 from efg.data.base_dataset import BaseDataset
 from efg.data.datasets.nuscenes.nusc_common import cls_attr_dist, general_to_detection, read_file, read_sweep
 from efg.data.registry import DATASETS
+from efg.utils.file_io import PathManager
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +25,6 @@ def drop_arrays_by_name(gt_names, used_classes):
 
 @DATASETS.register()
 class nuScenesDetectionDataset(BaseDataset):
-
     def __init__(self, config):
         super(nuScenesDetectionDataset, self).__init__(config)
         self.config = config
@@ -82,9 +84,7 @@ class nuScenesDetectionDataset(BaseDataset):
         return meta
 
     def load_infos(self):
-
-        with open(self.info_path, "rb") as f:
-            _nusc_infos_all = pickle.load(f)
+        _nusc_infos_all = pickle.load(PathManager.open(self.info_path, "rb"))
 
         if self.is_train:  # if training
             self.frac = int(len(_nusc_infos_all) * 0.25)
@@ -123,12 +123,10 @@ class nuScenesDetectionDataset(BaseDataset):
         return len(self.dataset_dicts)
 
     def __getitem__(self, idx):
-
         info = deepcopy(self.dataset_dicts[idx])
 
         if info["lidar_path"].startswith("datasets/nuscenes"):
-            lidar_path = info["lidar_path"].replace("datasets/nuscenes", "/cache/bjzhu/datasets/nuScenes")
-
+            lidar_path = os.path.join(os.environ["EFG_PATH"], info["lidar_path"])
         points = read_file(lidar_path)
 
         # points[:, 3] /= 255
@@ -136,14 +134,14 @@ class nuScenesDetectionDataset(BaseDataset):
         sweep_times_list = [np.zeros((points.shape[0], 1))]
 
         nsweeps = self.meta["nsweeps"]
-        assert (nsweeps - 1) <= len(info["sweeps"]), \
-            "nsweeps {} should not greater than list length {}.".format(nsweeps, len(info["sweeps"]))
+        assert (nsweeps - 1) <= len(info["sweeps"]), "nsweeps {} should not greater than list length {}.".format(
+            nsweeps, len(info["sweeps"])
+        )
 
         for i in range(nsweeps - 1):
             sweep = info["sweeps"][i]
-
             if sweep["lidar_path"].startswith("datasets/nuscenes"):
-                slidar_path = sweep["lidar_path"].replace("datasets/nuscenes", "/cache/bjzhu/datasets/nuScenes")
+                slidar_path = os.path.join(os.environ["EFG_PATH"], sweep["lidar_path"])
             sweep["lidar_path"] = slidar_path
 
             points_sweep, times_sweep = read_sweep(sweep)
@@ -170,7 +168,12 @@ class nuScenesDetectionDataset(BaseDataset):
 
         if self.is_train:
             # N x 9: [x, y, z, l, w, h, vx, vy, r]
-            mask = drop_arrays_by_name(info["gt_names"], ["ignore", ])
+            mask = drop_arrays_by_name(
+                info["gt_names"],
+                [
+                    "ignore",
+                ],
+            )
             info["annotations"] = {
                 "gt_boxes": info.pop("gt_boxes")[mask],
                 "gt_names": info.pop("gt_names")[mask],
@@ -193,6 +196,8 @@ class nuScenesDetectionDataset(BaseDataset):
         _dict_select(target, keep)
 
     def _add_class_labels_to_annos(self, info):
-        info["annotations"]["labels"] = np.array(
-            [self.class_names.index(name) + 1 for name in info["annotations"]["gt_names"]]
-        ).astype(np.int64).reshape(-1)
+        info["annotations"]["labels"] = (
+            np.array([self.class_names.index(name) + 1 for name in info["annotations"]["gt_names"]])
+            .astype(np.int64)
+            .reshape(-1)
+        )
