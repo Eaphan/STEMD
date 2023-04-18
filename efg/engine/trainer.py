@@ -11,12 +11,12 @@ import torch
 from torch.nn.parallel import DistributedDataParallel
 
 from efg.data import build_dataloader, build_dataset
-from efg.engine.hooks import HookBase, IterTimer, Optimization, LRScheduler, PeriodicCheckpoint, PeriodicWriter
+from efg.engine.hooks import HookBase, IterTimer, LRScheduler, Optimization, PeriodicCheckpoint, PeriodicWriter
 from efg.evaluator.evaluator import inference_on_dataset
 from efg.solver import build_optimizer, build_scheduler
 from efg.utils import distributed as comm
 from efg.utils.checkpoint import Checkpointer
-from efg.utils.events import CommonMetricPrinter, EventStorage, get_event_storage
+from efg.utils.events import CommonMetricPrinter, EventStorage, JSONWriter, TensorboardXWriter, get_event_storage
 from efg.utils.file_io import PathManager
 
 from .registry import TRAINERS
@@ -25,7 +25,6 @@ logger = logging.getLogger(__name__)
 
 
 class TrainerBase:
-
     def __init__(self):
         self._hooks = []
         self._metrics = {}
@@ -61,7 +60,7 @@ class TrainerBase:
             for self.iter in range(self.start_iter, self.max_iters):
                 if self.iter % (self.config.trainer.window_size * 20) == 0:
                     logger.info(f"Host Name: {socket.gethostname()}")
-                    logger.info(f"Experiment Dir: {self.config.trainer.output_dir.split('EFG/')[-1]}")
+                    logger.info(f"Experiment Dir: {self.config.trainer.output_dir.split('EFG.private/')[-1]}")
                 self.before_step()
                 # by default, a step contains data_loading and model forward,
                 # loss backward is executed in after_step for better expansibility
@@ -132,15 +131,11 @@ class TrainerBase:
 
 @TRAINERS.register()
 class DefaultTrainer(TrainerBase):
-
-    def __init__(self, configuration):
+    def __init__(self, config):
         super(DefaultTrainer, self).__init__()
-
-        self.configuration = configuration
-        self.config = self.configuration.get_config()
+        self.config = config
         self.is_train = self.config.task == "train"
         self.setup()
-        self.configuration.freeze()
         logger.info("Finish trainer setup")
 
     def setup(self):
@@ -164,18 +159,23 @@ class DefaultTrainer(TrainerBase):
             if max_epochs is not None:
                 max_iters = len(self.dataloader) * max_epochs
                 self.config.solver.lr_scheduler.max_iters = max_iters
+                self.config.solver.lr_scheduler.epoch_iters = len(self.dataloader)
                 logger.info(f"Convert {max_epochs} epochs into {max_iters} iters")
 
             self._dataiter = iter(self.dataloader)
             logger.info(f"Finish dataloader setup: {self.dataloader}")
 
     def setup_model(self):
-        self.model = self.build_model(self.config)
+        model = self.build_model(self.config)
+
+        if hasattr(self.dataset, "meta"):
+            model.dataset_meta = self.dataset.meta
 
         if self.config.trainer.sync_bn and comm.is_dist_avail_and_initialized():
-            self.model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
+            self.model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
             logger.info(f"Model is converted into syncbn version: {self.model}")
         else:
+            self.model = model
             logger.info(f"Finish model setup: {self.model}")
 
         if self.is_train:
@@ -212,25 +212,25 @@ class DefaultTrainer(TrainerBase):
         all_model_checkpoints = [
             os.path.join(self.config.trainer.output_dir, file)
             for file in PathManager.ls(self.config.trainer.output_dir)
-            if PathManager.isfile(os.path.join(self.config.trainer.output_dir, file)) and
-            file.startswith("model_") and file.endswith(".pth")
+            if PathManager.isfile(os.path.join(self.config.trainer.output_dir, file))
+            and file.startswith("model_")
+            and file.endswith(".pth")
         ]
         all_model_checkpoints = sorted(all_model_checkpoints, key=os.path.getmtime)
 
         if len(all_model_checkpoints) > 0:
             if self.config.model.weights is not None:
-                matched = np.nonzero(np.array(
-                    [pts.endswith(self.config.model.weights.split("/")[-1]) for pts in all_model_checkpoints]
-                ))[0]
+                matched = np.nonzero(
+                    np.array([pts.endswith(self.config.model.weights.split("/")[-1]) for pts in all_model_checkpoints])
+                )[0]
                 if matched.shape[0] > 0:
                     load_path = all_model_checkpoints[matched[0]]
                 else:
-                    logger.info(
-                        "Cannot find matched checkpoints as {self.config.model.weights}, try to load the latest."
-                    )
+                    logger.info(f"Cannot find matched checkpoints as {self.config.model.weights}, load the latest.")
                     load_path = all_model_checkpoints[-1]
             else:
                 load_path = all_model_checkpoints[-1]
+
             if resume and PathManager.isfile(load_path):
                 self.start_iter = self.checkpointer.load(load_path, resume=resume).get("iteration", -1) + 1
                 self.iter = self.start_iter
@@ -238,6 +238,8 @@ class DefaultTrainer(TrainerBase):
                     self.start_epochs = self.start_iter // len(self.dataloader)
             elif PathManager.isfile(load_path):
                 self.checkpointer.load(load_path)
+        elif PathManager.isfile(self.config.model.weights):
+            self.checkpointer.load(self.config.model.weights)
         else:
             logger.info("Checkpoint does not exist")
             raise ModuleNotFoundError
@@ -255,9 +257,14 @@ class DefaultTrainer(TrainerBase):
             elif self.config.trainer.checkpoint_iter is not None:
                 checkpoint_period = self.config.trainer.checkpoint_iter
             hooks.append(PeriodicCheckpoint(checkpoint_period))
+
             # run writers in the end, so that evaluation metrics are written
             window_size = self.config.trainer.window_size
-            writers = [CommonMetricPrinter(self.max_iters, window_size=window_size), ]
+            writers = [
+                CommonMetricPrinter(self.max_iters),
+                JSONWriter(os.path.join(self.config.trainer.output_dir, "metrics.json")),
+                TensorboardXWriter(self.config.trainer.output_dir),
+            ]
             hooks.append(PeriodicWriter(writers, period=window_size))
 
         # def test_and_save_results():
@@ -269,7 +276,6 @@ class DefaultTrainer(TrainerBase):
         logger.info(f"Finish hooks setup: {hooks}")
 
     def step(self):
-
         start = time.perf_counter()
 
         try:

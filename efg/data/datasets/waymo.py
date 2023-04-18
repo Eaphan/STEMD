@@ -8,21 +8,23 @@ import numpy as np
 
 import torch
 
-from efg.data.augmentations3d import _dict_select, build_processors
+from efg.data.augmentations import build_processors
+from efg.data.augmentations3d import _dict_select
 from efg.data.base_dataset import BaseDataset
 from efg.data.datasets.utils import read_single_waymo, read_single_waymo_sweep
 from efg.data.registry import DATASETS
+from efg.utils.file_io import PathManager
 
 logger = logging.getLogger(__name__)
 
 CAT_TO_IDX = {
-    'UNKNOWN': 0,
-    'VEHICLE': 1,
-    'PEDESTRIAN': 2,
-    'SIGN': 3,
-    'CYCLIST': 4,
+    "UNKNOWN": 0,
+    "VEHICLE": 1,
+    "PEDESTRIAN": 2,
+    "SIGN": 3,
+    "CYCLIST": 4,
 }
-IDX_TO_CAT = ['UNKNOWN', 'VEHICLE', 'PEDESTRIAN', 'SIGN', 'CYCLIST']
+IDX_TO_CAT = ["UNKNOWN", "VEHICLE", "PEDESTRIAN", "SIGN", "CYCLIST"]
 # ignore sign class
 LABEL_TO_TYPE = {1: 1, 2: 2, 3: 4}
 
@@ -54,22 +56,19 @@ class WaymoDetectionDataset(BaseDataset):
         logger.info(f"Building data processors: {self.transforms}")
 
     def load_infos(self):
-        with open(self.info_path, "rb") as f:
-            waymo_infos_all = pickle.load(f)
-        return waymo_infos_all[::self.load_interval]
+        waymo_infos_all = pickle.load(PathManager.open(self.info_path, "rb"))
+        return waymo_infos_all[:: self.load_interval]
 
     def __len__(self):
         return len(self.dataset_dicts)
 
     def __getitem__(self, idx):
-
         info = deepcopy(self.dataset_dicts[idx])
+
         # load point cloud data
         if not os.path.isabs(info["path"]):
             info["path"] = os.path.join(self.root_path, info["path"])
-        with open(info["path"], 'rb') as f:
-            obj = pickle.load(f)
-
+        obj = pickle.load(PathManager.open(info["path"], "rb"))
         points = read_single_waymo(obj)
 
         nsweeps = self.nsweeps
@@ -83,9 +82,7 @@ class WaymoDetectionDataset(BaseDataset):
 
             for i in range(nsweeps - 1):
                 sweep = info["sweeps"][i]
-                sweep["path"] = os.path.join(self.root_path, sweep["path"])
-                with open(sweep["path"], "rb") as f:
-                    sweep_obj = pickle.load(f)
+                sweep_obj = pickle.load(PathManager.open(sweep["path"], "rb"))
                 points_sweep, times_sweep = read_single_waymo_sweep(sweep, sweep_obj)
                 sweep_points_list.append(points_sweep)
                 sweep_times_list.append(times_sweep)
@@ -103,7 +100,6 @@ class WaymoDetectionDataset(BaseDataset):
         }
 
         if not self.is_test:
-
             if "annotations" not in info:
                 info["annotations"] = {
                     "gt_boxes": info.pop("gt_boxes").astype(np.float32),
@@ -131,9 +127,11 @@ class WaymoDetectionDataset(BaseDataset):
         _dict_select(target, keep)
 
     def _add_class_labels_to_annos(self, info):
-        info["annotations"]["labels"] = np.array(
-            [self.class_names.index(name) + 1 for name in info["annotations"]["gt_names"]]
-        ).astype(np.int64).reshape(-1)
+        info["annotations"]["labels"] = (
+            np.array([self.class_names.index(name) + 1 for name in info["annotations"]["gt_names"]])
+            .astype(np.int64)
+            .reshape(-1)
+        )
 
 
 def collate(batch_list, device):
@@ -153,7 +151,7 @@ def collate(batch_list, device):
                 max_gt = max(max_gt, len(elems[k]))
                 batch_gt_boxes3d = np.zeros((batch_size, max_gt, *elems[0].shape[1:]), dtype=elems[0].dtype)
             for i in range(batch_size):
-                batch_gt_boxes3d[i, :len(elems[i])] = elems[i]
+                batch_gt_boxes3d[i, : len(elems[i])] = elems[i]
             if key != "gt_names":
                 batch_gt_boxes3d = torch.tensor(batch_gt_boxes3d, device=device)
             ret[key] = batch_gt_boxes3d

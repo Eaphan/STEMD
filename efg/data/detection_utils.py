@@ -15,21 +15,18 @@ from efg.data.structures.masks import BitMasks, PolygonMasks, polygons_to_bitmas
 from efg.data.structures.rotated_boxes import RotatedBoxes
 from efg.utils.file_io import PathManager
 
-# from . import transforms as T
-
-
-class SizeMismatchError(ValueError):
-    """
-    When loaded image has difference width/height compared with annotation.
-    """
-
-
 # https://en.wikipedia.org/wiki/YUV#SDTV_with_BT.601
 _M_RGB2YUV = [[0.299, 0.587, 0.114], [-0.14713, -0.28886, 0.436], [0.615, -0.51499, -0.10001]]
 _M_YUV2RGB = [[1.0, 0.0, 1.13983], [1.0, -0.39465, -0.58060], [1.0, 2.03211, 0.0]]
 
 # https://www.exiv2.org/tags.html
 _EXIF_ORIENT = 274  # exif 'Orientation' tag
+
+
+class SizeMismatchError(ValueError):
+    """
+    When loaded image has difference width/height compared with annotation.
+    """
 
 
 def convert_PIL_to_numpy(image, format):
@@ -162,9 +159,7 @@ def check_image_size(dataset_dict, image):
         if not image_wh == expected_wh:
             raise SizeMismatchError(
                 "Mismatched image shape{}, got {}, expect {}.".format(
-                    " for image " + dataset_dict["file_name"]
-                    if "file_name" in dataset_dict
-                    else "",
+                    " for image " + dataset_dict["file_name"] if "file_name" in dataset_dict else "",
                     image_wh,
                     expected_wh,
                 )
@@ -178,8 +173,58 @@ def check_image_size(dataset_dict, image):
         dataset_dict["height"] = image.shape[0]
 
 
-def transform_proposals(dataset_dict, image_shape, transforms,
-                        min_box_side_len, proposal_topk):
+def transform_instance_annotations(annotation, transforms, image_size):
+    """
+    Apply transforms to box and segmentation annotations of a single instance.
+    It will use `transforms.apply_box` for the box, and
+    `transforms.apply_coords` for segmentation polygons.
+    If you need anything more specially designed for each data structure,
+    you'll need to implement your own version of this function or the transforms.
+    Args:
+        annotation (dict): dict of instance annotations for a single instance.
+            It will be modified in-place.
+        transforms (TransformList or list[Transform]):
+        image_size (tuple): the height, width of the transformed image
+    Returns:
+        dict:
+            the same input dict with fields "bbox", "segmentation"
+            transformed according to `transforms`.
+            The "bbox_mode" field will be set to XYXY_ABS.
+    """
+    # if isinstance(transforms, (tuple, list)):
+    #     transforms = T.TransformList(transforms)
+
+    # bbox is 1d (per-instance bounding box)
+    bbox = BoxMode.convert(annotation["bbox"], annotation["bbox_mode"], BoxMode.XYXY_ABS)
+    # clip transformed bbox to image size
+    bbox = transforms.apply_box(np.array([bbox]))[0].clip(min=0)
+    annotation["bbox"] = np.minimum(bbox, list(image_size + image_size)[::-1])
+    annotation["bbox_mode"] = BoxMode.XYXY_ABS
+
+    if "segmentation" in annotation:
+        # each instance contains 1 or more polygons
+        segm = annotation["segmentation"]
+        if isinstance(segm, list):
+            # polygons
+            polygons = [np.asarray(p).reshape(-1, 2) for p in segm]
+            annotation["segmentation"] = [p.reshape(-1) for p in transforms.apply_polygons(polygons)]
+        elif isinstance(segm, dict):
+            # RLE
+            mask = mask_util.decode(segm)
+            mask = transforms.apply_segmentation(mask)
+            assert tuple(mask.shape[:2]) == image_size
+            annotation["segmentation"] = mask
+        else:
+            raise ValueError(
+                "Cannot transform segmentation of type '{}'!"
+                "Supported types are: polygons as list[list[float] or ndarray],"
+                " COCO-style RLE as a dict.".format(type(segm))
+            )
+
+    return annotation
+
+
+def transform_proposals(dataset_dict, image_shape, transforms, min_box_side_len, proposal_topk):
     """
     Apply transformations to the proposals in dataset_dict, if any.
 
@@ -203,10 +248,10 @@ def transform_proposals(dataset_dict, image_shape, transforms,
                 dataset_dict.pop("proposal_boxes"),
                 dataset_dict.pop("proposal_bbox_mode"),
                 BoxMode.XYXY_ABS,
-            ))
+            )
+        )
         boxes = Boxes(boxes)
-        objectness_logits = torch.as_tensor(
-            dataset_dict.pop("proposal_objectness_logits").astype("float32"))
+        objectness_logits = torch.as_tensor(dataset_dict.pop("proposal_objectness_logits").astype("float32"))
 
         boxes.clip(image_shape)
         keep = boxes.nonempty(threshold=min_box_side_len)
@@ -235,10 +280,7 @@ def annotations_to_instances(annos, image_size, mask_format="polygon"):
             "gt_masks", "gt_keypoints", if they can be obtained from `annos`.
             This is the format that builtin models expect.
     """
-    boxes = [
-        BoxMode.convert(obj["bbox"], obj["bbox_mode"], BoxMode.XYXY_ABS)
-        for obj in annos
-    ]
+    boxes = [BoxMode.convert(obj["bbox"], obj["bbox_mode"], BoxMode.XYXY_ABS) for obj in annos]
     target = Instances(image_size)
     boxes = target.gt_boxes = Boxes(boxes)
     boxes.clip(image_size)
@@ -262,8 +304,7 @@ def annotations_to_instances(annos, image_size, mask_format="polygon"):
                     # COCO RLE
                     masks.append(mask_util.decode(segm))
                 elif isinstance(segm, np.ndarray):
-                    assert segm.ndim == 2, "Expect segmentation of 2 dimensions, got {}.".format(
-                        segm.ndim)
+                    assert segm.ndim == 2, "Expect segmentation of 2 dimensions, got {}.".format(segm.ndim)
                     # mask array
                     masks.append(segm)
                 else:
@@ -271,12 +312,10 @@ def annotations_to_instances(annos, image_size, mask_format="polygon"):
                         "Cannot convert segmentation of type '{}' to BitMasks!"
                         "Supported types are: polygons as list[list[float] or ndarray],"
                         " COCO-style RLE as a dict, or a full-image segmentation mask "
-                        "as a 2D ndarray.".format(type(segm)))
+                        "as a 2D ndarray.".format(type(segm))
+                    )
             # torch.from_numpy does not support array with negative stride.
-            masks = BitMasks(
-                torch.stack([
-                    torch.from_numpy(np.ascontiguousarray(x)) for x in masks
-                ]))
+            masks = BitMasks(torch.stack([torch.from_numpy(np.ascontiguousarray(x)) for x in masks]))
         target.gt_masks = masks
 
     if len(annos) and "keypoints" in annos[0]:
@@ -371,6 +410,36 @@ def create_keypoint_hflip_indices(dataset_names, meta):
     return np.asarray(flip_indices)
 
 
+# def gen_crop_transform_with_instance(crop_size, image_size, instance):
+#     """
+#     Generate a CropTransform so that the cropping region contains
+#     the center of the given instance.
+#
+#     Args:
+#         crop_size (tuple): h, w in pixels
+#         image_size (tuple): h, w
+#         instance (dict): an annotation dict of one instance, in cvpods's
+#             dataset format.
+#     """
+#     crop_size = np.asarray(crop_size, dtype=np.int32)
+#     bbox = BoxMode.convert(instance["bbox"], instance["bbox_mode"],
+#                            BoxMode.XYXY_ABS)
+#     center_yx = (bbox[1] + bbox[3]) * 0.5, (bbox[0] + bbox[2]) * 0.5
+#
+#     assert (image_size[0] >= center_yx[0] and image_size[1] >= center_yx[1]
+#             ), "The annotation bounding box is outside of the image!"
+#     assert (image_size[0] >= crop_size[0] and image_size[1] >= crop_size[1]
+#             ), "Crop size is larger than image size!"
+#
+#     min_yx = np.maximum(np.ceil(center_yx).astype(np.int32) - crop_size, 0)
+#     max_yx = np.maximum(np.asarray(image_size, dtype=np.int32) - crop_size, 0)
+#     max_yx = np.minimum(max_yx, np.floor(center_yx).astype(np.int32))
+#
+#     y0 = np.random.randint(min_yx[0], max_yx[0] + 1)
+#     x0 = np.random.randint(min_yx[1], max_yx[1] + 1)
+#     return T.CropTransform(x0, y0, crop_size[1], crop_size[0])
+
+
 def check_metadata_consistency(key, dataset_names, meta):
     """
     Check that the datasets have consistent metadata.
@@ -389,20 +458,18 @@ def check_metadata_consistency(key, dataset_names, meta):
     entries_per_dataset = [meta.get(key) for d in dataset_names]
     for idx, entry in enumerate(entries_per_dataset):
         if entry != entries_per_dataset[0]:
-            logger.error("Metadata '{}' for dataset '{}' is '{}'".format(
-                key, dataset_names[idx], str(entry)))
-            logger.error("Metadata '{}' for dataset '{}' is '{}'".format(
-                key, dataset_names[0], str(entries_per_dataset[0])))
-            raise ValueError(
-                "Datasets have different metadata '{}'!".format(key))
+            logger.error("Metadata '{}' for dataset '{}' is '{}'".format(key, dataset_names[idx], str(entry)))
+            logger.error(
+                "Metadata '{}' for dataset '{}' is '{}'".format(key, dataset_names[0], str(entries_per_dataset[0]))
+            )
+            raise ValueError("Datasets have different metadata '{}'!".format(key))
 
 
 def check_sample_valid(args):
     if args["sample_style"] == "range":
-        assert (
-            len(args["short_edge_length"]) == 2
-        ), f"more than 2 ({len(args['short_edge_length'])}) " \
-            "short_edge_length(s) are provided for ranges"
+        assert len(args["short_edge_length"]) == 2, (
+            f"more than 2 ({len(args['short_edge_length'])}) " "short_edge_length(s) are provided for ranges"
+        )
 
 
 def imdecode(data, *, require_chl3=True, require_alpha=False):
@@ -415,13 +482,13 @@ def imdecode(data, *, require_chl3=True, require_alpha=False):
     """
     img = cv2.imdecode(np.fromstring(data, np.uint8), cv2.IMREAD_UNCHANGED)
 
-    if img is None and len(data) >= 3 and data[:3] == b'GIF':
+    if img is None and len(data) >= 3 and data[:3] == b"GIF":
         # cv2 doesn't support GIF, try PIL
         img = _gif_decode(data)
 
-    assert img is not None, 'failed to decode'
+    assert img is not None, "failed to decode"
     if img.ndim == 2 and require_chl3:
-        img = img.reshape(img.shape + (1, ))
+        img = img.reshape(img.shape + (1,))
     if img.shape[2] == 1 and require_chl3:
         img = np.tile(img, (1, 1, 3))
     if img.ndim == 3 and img.shape[2] == 3 and require_alpha:
@@ -437,7 +504,7 @@ def _gif_decode(data):
         from PIL import Image
 
         im = Image.open(io.BytesIO(data))
-        im = im.convert('RGB')
+        im = im.convert("RGB")
         return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
     except Exception:
         return

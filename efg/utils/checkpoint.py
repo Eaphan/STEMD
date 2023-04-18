@@ -100,8 +100,8 @@ class Checkpointer:
             with PathManager.open(filename, "rb") as f:
                 data = pickle.load(f, encoding="latin1")
             if "model" in data and "__author__" in data:
-                # file is in d2 model zoo format
-                self.logger.info("Reading a file from '{}'".format(data["__author__"]))
+                # file is in cvpods model zoo format
+                logger.info("Reading a file from '{}'".format(data["__author__"]))
                 return data
             else:
                 # assume file is from Caffe2 / Detectron1 model zoo
@@ -143,24 +143,16 @@ class Checkpointer:
                 if shape_model != shape_checkpoint:
                     logger.warning(
                         "'{}' has shape {} in the checkpoint but {} in the "
-                        "model! Skipped.".format(
-                            k, shape_checkpoint, shape_model
-                        )
+                        "model! Skipped.".format(k, shape_checkpoint, shape_model)
                     )
                     checkpoint_state_dict.pop(k)
 
-        incompatible = self.model.load_state_dict(
-            checkpoint_state_dict, strict=False
-        )
+        incompatible = self.model.load_state_dict(checkpoint_state_dict, strict=False)
 
         if incompatible.missing_keys:
-            logger.info(
-                get_missing_parameters_message(incompatible.missing_keys)
-            )
+            logger.info(get_missing_parameters_message(incompatible.missing_keys))
         if incompatible.unexpected_keys:
-            logger.info(
-                get_unexpected_parameters_message(incompatible.unexpected_keys)
-            )
+            logger.info(get_unexpected_parameters_message(incompatible.unexpected_keys))
 
 
 def _convert_ndarray_to_tensor(state_dict: dict):
@@ -176,13 +168,7 @@ def _convert_ndarray_to_tensor(state_dict: dict):
         if "weight_order" in k:
             continue
         v = state_dict[k]
-        if not isinstance(v, np.ndarray) and not isinstance(
-            v, torch.Tensor
-        ):
-            raise ValueError(
-                "Unsupported type found in checkpoint! {}: {}".format(
-                    k, type(v)
-                )
-            )
+        if not isinstance(v, np.ndarray) and not isinstance(v, torch.Tensor):
+            raise ValueError("Unsupported type found in checkpoint! {}: {}".format(k, type(v)))
         if not isinstance(v, torch.Tensor):
             state_dict[k] = torch.from_numpy(v)
