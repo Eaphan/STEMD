@@ -7,6 +7,7 @@ from copy import deepcopy
 def read_from_file(info, nsweeps=1, root_path=""):
     if not os.path.isabs(info["path"]):
         info["path"] = os.path.join(root_path, info["path"])
+    read_path_set = [info["path"]]
     with open(info["path"], "rb") as f:
         obj = pickle.load(f)
 
@@ -25,6 +26,11 @@ def read_from_file(info, nsweeps=1, root_path=""):
             sweep = deepcopy(info["sweeps"][i])
             if not os.path.isabs(sweep["path"]):
                 sweep["path"] = os.path.join(root_path, sweep["path"])
+            
+            if sweep["path"] in read_path_set:
+                break
+            read_path_set.append(sweep["path"])
+
             with open(sweep["path"], "rb") as f:
                 sweep_obj = pickle.load(f)
             points_sweep, times_sweep = read_single_waymo_sweep(sweep, sweep_obj)

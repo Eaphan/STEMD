@@ -7,12 +7,24 @@ detection:
             val: /infos_val_01sweeps_sampled.pkl
             test: /infos_test_01sweeps_sampled.pkl 
             gt_database: /gt_database_train_01sweeps_withvelo_sampled_infos
+        local2f:
+            root: ${oc.env:EFG_PATH}/datasets/waymo
+            train: /infos_train_02sweeps_sampled.pkl
+            val: /infos_val_02sweeps_sampled.pkl
+            test: /infos_test_02sweeps_sampled.pkl 
+            gt_database: /gt_database_train_02sweeps_withvelo_sampled_infos
         local4f:
             root: ${oc.env:EFG_PATH}/datasets/waymo
             train: /infos_train_04sweeps_sampled.pkl
             val: /infos_val_04sweeps_sampled.pkl
             test: /infos_test_04sweeps_sampled.pkl 
             gt_database: /gt_database_train_04sweeps_withvelo_sampled_infos
+        local8f:
+            root: ${oc.env:EFG_PATH}/datasets/waymo
+            train: /infos_train_08sweeps_sampled.pkl
+            val: /infos_val_08sweeps_sampled.pkl
+            test: /infos_test_08sweeps_sampled.pkl 
+            gt_database: /gt_database_train_08sweeps_withvelo_sampled_infos            
         local16f:
             root: ${oc.env:EFG_PATH}/datasets/waymo
             train: /infos_train_16sweeps_sampled.pkl

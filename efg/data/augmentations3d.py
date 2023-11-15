@@ -84,10 +84,18 @@ class DatabaseSampling(AugmentationBase):
             if sampled_dict is not None:
                 for k in ["gt_names", "gt_boxes"]:
                     info["annotations"][k] = np.concatenate([info["annotations"][k], sampled_dict[k]], axis=0)
+                    for sweep in info["sweeps"]:
+                        if "annotations" in sweep:
+                            sweep["annotations"][k] = np.concatenate([sweep["annotations"][k], sampled_dict[k]], axis=0)
+
                 for k in ["difficulty", "num_points_in_gt"]:
                     if k in info["annotations"]:
                         info["annotations"][k] = np.concatenate([info["annotations"][k], sampled_dict[k]], axis=0)
                 info["annotations"]["gt_boxes"] = np.nan_to_num(info["annotations"]["gt_boxes"])
+
+                for sweep in info["sweeps"]:
+                    if "annotations" in sweep:
+                        sweep["annotations"]["gt_boxes"] = np.nan_to_num(sweep["annotations"]["gt_boxes"])
 
                 if self.rm_points_after_sample:
                     sampled_gt_boxes = np.nan_to_num(sampled_dict["gt_boxes"])
@@ -278,48 +286,6 @@ class Voxelization(AugmentationBase):
             points=points,
             coordinates=coordinates,
             num_points_per_voxel=num_points_per_voxel,
-            num_voxels=num_voxels,
-            shape=grid_size,
-            range=pc_range,
-            size=self.voxel_size,
-        )
-        return point_voxels, info
-
-
-@PROCESSORS.register()
-class MultiFrameVoxelization(AugmentationBase):
-    # params include nsweeps
-    def __init__(self, pc_range, voxel_size, max_points_in_voxel, max_voxel_num, nsweeps):
-        super().__init__()
-        self._init(locals())
-        self.voxel_generator = VoxelGenerator(
-            voxel_size=voxel_size,
-            point_cloud_range=pc_range,
-            max_num_points=max_points_in_voxel,
-            max_voxels=max_voxel_num,
-        )
-        self.nsweeps = nsweeps
-
-    def __call__(self, points, info):
-        # [0, -40, -3, 70.4, 40, 1]
-        pc_range = self.voxel_generator.point_cloud_range
-        grid_size = self.voxel_generator.grid_size
-        voxels_list = [] # list item by time
-        coordinates_list = []
-        num_points_per_voxel_list = []
-        for i in range(self.nsweeps):
-            current_points = points[(points[:, -1] > 0.1*i-0.01)&(points[:, -1] < 0.1*i+0.01), :-1]
-            voxels, coordinates, num_points_per_voxel = self.voxel_generator.generate(current_points)
-            voxels_list.append(voxels)
-            coordinates_list.append(coordinates)
-            num_points_per_voxel_list.append(num_points_per_voxel)
-
-        num_voxels = np.array([voxels.shape[0]], dtype=np.int64)
-        point_voxels = dict(
-            voxels_list=voxels_list,
-            points=points,
-            coordinates_list=coordinates_list,
-            num_points_per_voxel_list=num_points_per_voxel_list,
             num_voxels=num_voxels,
             shape=grid_size,
             range=pc_range,
