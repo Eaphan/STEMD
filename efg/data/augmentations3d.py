@@ -84,9 +84,9 @@ class DatabaseSampling(AugmentationBase):
             if sampled_dict is not None:
                 for k in ["gt_names", "gt_boxes"]:
                     info["annotations"][k] = np.concatenate([info["annotations"][k], sampled_dict[k]], axis=0)
-                    for sweep in info["sweeps"]:
-                        if "annotations" in sweep:
-                            sweep["annotations"][k] = np.concatenate([sweep["annotations"][k], sampled_dict[k]], axis=0)
+                    #for sweep in info["sweeps"]:
+                    #    if "annotations" in sweep:
+                    #        sweep["annotations"][k] = np.concatenate([sweep["annotations"][k], sampled_dict[k]], axis=0)
 
                 for k in ["difficulty", "num_points_in_gt"]:
                     if k in info["annotations"]:
