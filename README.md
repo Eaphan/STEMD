@@ -119,4 +119,11 @@ All models are trained and evaluated on 8 x NVIDIA A100 GPUs.
   journal={arXiv preprint arXiv:2307.00347},
   year={2023}
 }
+@inproceedings{zhu2023conquer,
+  title={Conquer: Query contrast voxel-detr for 3d object detection},
+  author={Zhu, Benjin and Wang, Zhe and Shi, Shaoshuai and Xu, Hang and Hong, Lanqing and Li, Hongsheng},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+  pages={9296--9305},
+  year={2023}
+}
 ```
