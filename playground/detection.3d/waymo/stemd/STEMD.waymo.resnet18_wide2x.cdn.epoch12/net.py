@@ -1,12 +1,12 @@
 from env import CustomTrainer, CustomWDDataset
 from modules.optimizer import AdamWMulti
-from voxel_detr import VoxelDETR
+from stemd import STEMD
 
-__all__ = ["build_model", "AdamWMulti", "CustomTrainer", "CustomWDDataset", "VoxelDETR"]
+__all__ = ["build_model", "AdamWMulti", "CustomTrainer", "CustomWDDataset", "STEMD"]
 
 
 def build_model(self, config):
 
-    model = VoxelDETR(config)
+    model = STEMD(config)
 
     return model

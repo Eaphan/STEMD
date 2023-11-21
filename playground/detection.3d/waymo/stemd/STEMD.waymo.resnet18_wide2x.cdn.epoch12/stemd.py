@@ -41,7 +41,7 @@ class GAT(torch.nn.Module):
         #h = h + x
         return h
 
-class VoxelDETR(nn.Module):
+class STEMD(nn.Module):
     def __init__(self, config):
         super().__init__()
 
