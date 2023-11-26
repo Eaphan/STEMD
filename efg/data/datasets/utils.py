@@ -12,15 +12,15 @@ def read_from_file(info, nsweeps=1, root_path=""):
         obj = pickle.load(f)
 
     points = read_single_waymo(obj)
-    times = None
+    times = np.zeros((points.shape[0], 1))
 
     if nsweeps > 1:
         sweep_points_list = [points]
         sweep_times_list = [np.zeros((points.shape[0], 1))]
 
-        assert (nsweeps - 1) == len(info["sweeps"]), "nsweeps {} should be equal to the list length {}.".format(
-            nsweeps, len(info["sweeps"])
-        )
+        #assert (nsweeps - 1) == len(info["sweeps"]), "nsweeps {} should be equal to the list length {}.".format(
+        #    nsweeps, len(info["sweeps"])
+        #)
 
         for i in range(nsweeps - 1):
             sweep = deepcopy(info["sweeps"][i])

@@ -1,7 +1,7 @@
 # Spatial-Temporal Enhanced Transformer Towards Multi-Frame 3D Object Detection 
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2307.00347)
 
-Implementation of paper: "Spatial-Temporal Enhanced Transformer Towards Multi-Frame 3D Object Detection".  The implementation is mainly based on an Efficient, Flexible, and General deep learning framework namely [`EFG`](https://github.com/V2AI/EFG).
+Implementation of paper: "Spatial-Temporal Enhanced Transformer Towards Multi-Frame 3D Object Detection".  The implementation is mainly based on an Efficient, Flexible, and General deep learning framework, namely [EFG](https://github.com/V2AI/EFG).
 
 ## Overview
 - [Installation](#1-installation)
@@ -74,7 +74,7 @@ python cli/data_preparation/nuscenes/create_data.py --root-path datasets/nuscene
 ##  3.1 Training & Evaluation
 
 ```shell
-cd playground/detection.3d/waymo/stemd/STEMD.waymo.resnet18_wide2x.cdn.epoch12
+cd playground/detection.3d/waymo/stemd/STEMD.waymo.resnet18.cdn.epoch12
 
 efg_run --num-gpus x  # default 1
 efg_run --num-gpus x task [train | val | test]
@@ -95,7 +95,7 @@ All models are trained and evaluated on 8 x NVIDIA A100 GPUs.
 
 |    Methods    | Frames | Schedule |  VEHICLE  | PEDESTRIAN |  CYCLIST  |
 | :-----------: | :----: | :------: | :-------: | :--------: | :-------: |
-|    STEMD      |   4    |    12    | 72.4/72.0 | 78.0/74.7  | 78.0/76.9 |
+|    [STEMD](playground/detection.3d/waymo/stemd/STEMD.waymo.resnet18_wide2x.cdn.epoch12/config.yaml)      |   4    |    12    | 72.4/72.0 | 78.0/74.7  | 78.0/76.9 |
 
 <!--
 ## nuScenes - 3D Object Detection (val)
