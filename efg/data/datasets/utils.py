@@ -12,7 +12,7 @@ def read_from_file(info, nsweeps=1, root_path=""):
         obj = pickle.load(f)
 
     points = read_single_waymo(obj)
-    times = np.zeros((points.shape[0], 1))
+    times = None
 
     if nsweeps > 1:
         sweep_points_list = [points]
@@ -27,8 +27,8 @@ def read_from_file(info, nsweeps=1, root_path=""):
             if not os.path.isabs(sweep["path"]):
                 sweep["path"] = os.path.join(root_path, sweep["path"])
             
-            if sweep["path"] in read_path_set:
-                break
+            # if sweep["path"] in read_path_set:
+            #     break
             read_path_set.append(sweep["path"])
 
             with open(sweep["path"], "rb") as f:

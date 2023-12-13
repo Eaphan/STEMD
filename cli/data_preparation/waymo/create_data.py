@@ -278,17 +278,17 @@ def create_groundtruth_database(
         image_idx = info["token"].split(".")[0]
 
         # ad hoc for multi-frame detectors like STEMD
-        if nsweeps == 1:
-            nsweeps_each_element = 1
-        else:
-            seq_len = 4
-            nsweeps_each_element = nsweeps//seq_len
+        # if nsweeps == 1:
+        #     nsweeps_each_element = 1
+        # else:
+        #     seq_len = 4
+        #     nsweeps_each_element = nsweeps//seq_len
 
         sensor_data = _get_sensor_data(
             index,
             dataset_infos_all,
             root_path,
-            nsweeps=nsweeps_each_element,
+            nsweeps=nsweeps,
             point_features=point_features,
             test_mode=test_mode,
         )
