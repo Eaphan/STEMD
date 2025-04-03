@@ -107,17 +107,20 @@ All models are trained and evaluated on 8 x NVIDIA A100 GPUs.
 
 # 5. Citation
 ```shell
+@article{zhang2024stemd,
+  title={Spatial-Temporal Graph Enhanced DETR Towards Multi-Frame 3D Object Detection},
+  author={Zhang, Yifan and Zhu, Zhiyu and Hou, Junhui and Wu, Dapeng},
+  journal={IEEE Transactions on Pattern Analysis and Machine Intelligence}, 
+  volume={46},
+  number={12},
+  pages={10614--10628},
+  year={2024}
+}
 @misc{zhu2023efg,
     title={EFG: An Efficient, Flexible, and General deep learning framework that retains minimal},
     author={EFG Contributors},
     howpublished = {\url{https://github.com/poodarchu/efg}},
     year={2023}
-}
-@article{zhang2023spatial,
-  title={Spatial-Temporal Enhanced Transformer Towards Multi-Frame 3D Object Detection},
-  author={Zhang, Yifan and Zhu, Zhiyu and Hou, Junhui and Wu, Dapeng},
-  journal={arXiv preprint arXiv:2307.00347},
-  year={2023}
 }
 @inproceedings{zhu2023conquer,
   title={Conquer: Query contrast voxel-detr for 3d object detection},
